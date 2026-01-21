@@ -147,7 +147,8 @@ static void rope_embbedder(const ncnn::Mat& ids, ncnn::Mat& out_cos, ncnn::Mat& 
 
 int main()
 {
-    const char* prompt = "風的彷徨.";
+    // const char* prompt = "風的彷徨.";
+    const char* prompt = "風的彷徨.美少女.半身照.";
     const int width = 1024;
     const int height = 1024;
     // const int width = 512;
@@ -404,7 +405,8 @@ int main()
         sigmas[steps] = 0.f;
     }
 
-    // diffusion transformer loop
+    // t_embedder
+    ncnn::Mat t_embeds;
     {
         ncnn::Net t_embedder;
         t_embedder.opt.vulkan_device_index = gpuid;
@@ -417,6 +419,23 @@ int main()
         t_embedder.load_param("z_image_turbo_transformer_t_embedder.ncnn.param");
         t_embedder.load_model("z_image_turbo_transformer_t_embedder.ncnn.bin");
 
+        const float t_scale = 1000.f;
+
+        ncnn::Mat t_mat(1, steps);
+        for (int z = 0; z < steps; z++)
+        {
+            t_mat.row(z)[0] = timesteps[z] * t_scale;
+        }
+
+        ncnn::Extractor ex = t_embedder.create_extractor();
+
+        ex.input("in0", t_mat);
+
+        ex.extract("out0", t_embeds);
+    }
+
+    // diffusion transformer loop
+    {
         ncnn::Net all_x_embedder;
         all_x_embedder.opt.vulkan_device_index = gpuid;
         all_x_embedder.opt.use_vulkan_compute = use_gpu;
@@ -463,21 +482,6 @@ int main()
 
         for (int z = 0; z < steps; z++)
         {
-            // timestep embedder
-            ncnn::Mat t_embed;
-            {
-                const float t_scale = 1000.f;
-
-                ncnn::Mat t_mat(1);
-                t_mat[0] = timesteps[z] * t_scale;
-
-                ncnn::Extractor ex = t_embedder.create_extractor();
-
-                ex.input("in0", t_mat);
-
-                ex.extract("out0", t_embed);
-            }
-
             // all_x_embedder
             ncnn::Mat x_embed;
             {
@@ -487,6 +491,8 @@ int main()
 
                 ex.extract("out0", x_embed);
             }
+
+            ncnn::Mat t_embed = t_embeds.row_range(z, 1).clone();
 
             // noise_refiner
             ncnn::Mat x_embed_refine;
@@ -538,7 +544,8 @@ int main()
             {
                 const float dt = sigmas[z + 1] - sigmas[z];
 
-                for (int i = 0; i < x.total(); i++)
+                const int total = x.total();
+                for (int i = 0; i < total; i++)
                 {
                     x[i] = x[i] - dt * unified_final[i];
                 }
