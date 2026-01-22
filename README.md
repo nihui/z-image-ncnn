@@ -16,6 +16,8 @@ https://github.com/Tongyi-MAI/Z-Image
 
 Currently, this program requires a Vulkan capable graphics card with at least 16GB of VRAM to run.
 
+This program requires code from the ncnn git master branch to achieve correct results and optimal performance.
+
 Further performance and video memory usage optimizations are underway. Please stay tuned :)
 
 ### prepare model files
