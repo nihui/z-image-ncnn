@@ -17,7 +17,7 @@
 #include "mat.h"
 #include "net.h"
 
-static void generate_rope_embed_cache(int seqlen, int embed_dim, int position_id, ncnn::Mat& cos_cache, ncnn::Mat& sin_cache)
+static void generate_rope_embed_cache(int seqlen, int embed_dim, int position_id, ncnn::Mat &cos_cache, ncnn::Mat &sin_cache)
 {
     const float rope_theta = 1000000;
     const float attention_factor = 1.f;
@@ -34,8 +34,8 @@ static void generate_rope_embed_cache(int seqlen, int embed_dim, int position_id
 
     for (int i = 0; i < seqlen; i++)
     {
-        float* cos_ptr = cos_cache.row(i);
-        float* sin_ptr = sin_cache.row(i);
+        float *cos_ptr = cos_cache.row(i);
+        float *sin_ptr = sin_cache.row(i);
 
         for (int j = 0; j < embed_dim / 2; j++)
         {
@@ -49,7 +49,7 @@ static void generate_rope_embed_cache(int seqlen, int embed_dim, int position_id
     }
 }
 
-static void rope_embbedder(const ncnn::Mat& ids, ncnn::Mat& out_cos, ncnn::Mat& out_sin)
+static void rope_embbedder(const ncnn::Mat &ids, ncnn::Mat &out_cos, ncnn::Mat &out_sin)
 {
     // 确保预计算已完成
     const float theta = 256.0f;
@@ -71,8 +71,8 @@ static void rope_embbedder(const ncnn::Mat& ids, ncnn::Mat& out_cos, ncnn::Mat& 
 
             for (int t = 0; t < end; t++)
             {
-                float* cos_ptr = cos_mat.row(t);
-                float* sin_ptr = sin_mat.row(t);
+                float *cos_ptr = cos_mat.row(t);
+                float *sin_ptr = sin_mat.row(t);
 
                 for (int j = 0; j < half_dim; j++)
                 {
@@ -107,11 +107,11 @@ static void rope_embbedder(const ncnn::Mat& ids, ncnn::Mat& out_cos, ncnn::Mat& 
     for (int i = 0; i < seqlen; i++)
     {
         // 获取当前步的索引 tuple [t, h, w]
-        const int* id_ptr = ids.row<const int>(i);
+        const int *id_ptr = ids.row<const int>(i);
 
         // 获取输出 Mat 当前行的指针
-        float* out_c_ptr = out_cos.row(i);
-        float* out_s_ptr = out_sin.row(i);
+        float *out_c_ptr = out_cos.row(i);
+        float *out_s_ptr = out_sin.row(i);
 
         int current_offset = 0;
 
@@ -122,19 +122,21 @@ static void rope_embbedder(const ncnn::Mat& ids, ncnn::Mat& out_cos, ncnn::Mat& 
             int idx = (int)id_ptr[axis];
 
             // 简单的边界保护
-            if (idx < 0) idx = 0;
-            if (idx >= axes_lens[axis]) idx = axes_lens[axis] - 1;
+            if (idx < 0)
+                idx = 0;
+            if (idx >= axes_lens[axis])
+                idx = axes_lens[axis] - 1;
 
             // 获取该轴的预计算表
-            const ncnn::Mat& cache_c = freqs_cos[axis];
-            const ncnn::Mat& cache_s = freqs_sin[axis];
+            const ncnn::Mat &cache_c = freqs_cos[axis];
+            const ncnn::Mat &cache_s = freqs_sin[axis];
 
             // 该轴的特征长度
             int half_dim = axes_dims[axis] / 2;
 
             // 从缓存中复制数据到输出
-            const float* src_c = cache_c.row(idx);
-            const float* src_s = cache_s.row(idx);
+            const float *src_c = cache_c.row(idx);
+            const float *src_s = cache_s.row(idx);
 
             memcpy(out_c_ptr + current_offset, src_c, half_dim * sizeof(float));
             memcpy(out_s_ptr + current_offset, src_s, half_dim * sizeof(float));
@@ -145,10 +147,32 @@ static void rope_embbedder(const ncnn::Mat& ids, ncnn::Mat& out_cos, ncnn::Mat& 
     }
 }
 
-int main()
+std::string PathJoin(std::string dir, std::string file)
 {
+    if (dir.back() != '/')
+    {
+        dir += "/";
+    }
+    std::string joined = dir + file;
+    return joined;
+}
+
+int main(int argc, char *argv[])
+{
+    if (argc < 3)
+    {
+        printf("Usage: %s <models_dir> <prompt>\n", argv[0]);
+        return -1;
+    }
+
+    const char *models_dir = argv[1];
+    const char *prompt = argv[2];
+
+    printf("models_dir: %s\n", models_dir);
+    printf("prompt: %s\n", prompt);
+
     // const char* prompt = "風的彷徨.";
-    const char* prompt = "風的彷徨.美少女.半身照.";
+    // const char *prompt = "風的彷徨.美少女.半身照.";
     const int width = 1024;
     const int height = 1024;
     // const int width = 512;
@@ -156,8 +180,13 @@ int main()
     const int steps = 9;
     const int seed = 777;
 
+#if NCNN_VULKAN
     const int gpuid = ncnn::get_default_gpu_index();
     const bool use_gpu = true;
+#else
+    const int gpuid = -1;
+    const bool use_gpu = false;
+#endif
     const bool use_bf16 = true;
 
     // assert width % 16 == 0
@@ -167,7 +196,7 @@ int main()
     // tokenizer
     std::vector<int> input_ids;
     {
-        BpeTokenizer bpe = BpeTokenizer::LoadFromFiles("vocab.txt", "merges.txt", SpecialTokensConfig{}, false, true, true);
+        BpeTokenizer bpe = BpeTokenizer::LoadFromFiles(PathJoin(models_dir, "vocab.txt"), PathJoin(models_dir, "merges.txt"), SpecialTokensConfig{}, false, true, true);
 
         bpe.AddAdditionalSpecialToken("<|endoftext|>");
         bpe.AddAdditionalSpecialToken("<|im_start|>");
@@ -189,8 +218,8 @@ int main()
         text_encoder.opt.use_fp16_arithmetic = false;
         text_encoder.opt.use_bf16_packed = use_bf16;
         text_encoder.opt.use_bf16_storage = use_bf16;
-        text_encoder.load_param("z_image_turbo_text_encoder.ncnn.param");
-        text_encoder.load_model("z_image_turbo_text_encoder.ncnn.bin");
+        text_encoder.load_param(PathJoin(models_dir, "z_image_turbo_text_encoder.ncnn.param").c_str());
+        text_encoder.load_model(PathJoin(models_dir, "z_image_turbo_text_encoder.ncnn.bin").c_str());
 
         const int input_id_count = (int)input_ids.size();
 
@@ -201,7 +230,7 @@ int main()
         attention_mask.fill(-1e38f);
         for (int i = 0; i < input_ids.size(); i++)
         {
-            float* row = attention_mask.row(i);
+            float *row = attention_mask.row(i);
             for (int j = 0; j < i + 1; j++)
             {
                 row[j] = 0.f;
@@ -261,7 +290,7 @@ int main()
         {
             for (int px = 0; px < num_patches_w; px++)
             {
-                int* p = x_pos_ids.row<int>(py * num_patches_w + px);
+                int *p = x_pos_ids.row<int>(py * num_patches_w + px);
                 p[0] = start_t;
                 p[1] = py;
                 p[2] = px;
@@ -279,7 +308,7 @@ int main()
         ncnn::Mat cap_pos_ids(3, cap_len);
         for (int i = 0; i < cap_len; i++)
         {
-            int* p = cap_pos_ids.row<int>(i);
+            int *p = cap_pos_ids.row<int>(i);
             p[0] = 1 + i;
             p[1] = 0;
             p[2] = 0;
@@ -312,8 +341,8 @@ int main()
         cap_embedder.opt.use_fp16_arithmetic = false;
         cap_embedder.opt.use_bf16_packed = use_bf16;
         cap_embedder.opt.use_bf16_storage = use_bf16;
-        cap_embedder.load_param("z_image_turbo_transformer_cap_embedder.ncnn.param");
-        cap_embedder.load_model("z_image_turbo_transformer_cap_embedder.ncnn.bin");
+        cap_embedder.load_param(PathJoin(models_dir, "z_image_turbo_transformer_cap_embedder.ncnn.param").c_str());
+        cap_embedder.load_model(PathJoin(models_dir, "z_image_turbo_transformer_cap_embedder.ncnn.bin").c_str());
 
         ncnn::Extractor ex = cap_embedder.create_extractor();
 
@@ -333,8 +362,8 @@ int main()
         context_refiner.opt.use_fp16_arithmetic = false;
         context_refiner.opt.use_bf16_packed = use_bf16;
         context_refiner.opt.use_bf16_storage = use_bf16;
-        context_refiner.load_param("z_image_turbo_transformer_context_refiner.ncnn.param");
-        context_refiner.load_model("z_image_turbo_transformer_context_refiner.ncnn.bin");
+        context_refiner.load_param(PathJoin(models_dir, "z_image_turbo_transformer_context_refiner.ncnn.param").c_str());
+        context_refiner.load_model(PathJoin(models_dir, "z_image_turbo_transformer_context_refiner.ncnn.bin").c_str());
 
         ncnn::Extractor ex = context_refiner.create_extractor();
 
@@ -362,7 +391,7 @@ int main()
         {
             for (int px = 0; px < num_patches_w; px++)
             {
-                float* outptr = x.row(py * num_patches_w + px);
+                float *outptr = x.row(py * num_patches_w + px);
 
                 for (int q = 0; q < channels; q++)
                 {
@@ -416,8 +445,8 @@ int main()
         t_embedder.opt.use_fp16_arithmetic = false;
         t_embedder.opt.use_bf16_packed = use_bf16;
         t_embedder.opt.use_bf16_storage = use_bf16;
-        t_embedder.load_param("z_image_turbo_transformer_t_embedder.ncnn.param");
-        t_embedder.load_model("z_image_turbo_transformer_t_embedder.ncnn.bin");
+        t_embedder.load_param(PathJoin(models_dir, "z_image_turbo_transformer_t_embedder.ncnn.param").c_str());
+        t_embedder.load_model(PathJoin(models_dir, "z_image_turbo_transformer_t_embedder.ncnn.bin").c_str());
 
         const float t_scale = 1000.f;
 
@@ -444,8 +473,8 @@ int main()
         all_x_embedder.opt.use_fp16_arithmetic = false;
         all_x_embedder.opt.use_bf16_packed = use_bf16;
         all_x_embedder.opt.use_bf16_storage = use_bf16;
-        all_x_embedder.load_param("z_image_turbo_transformer_all_x_embedder.ncnn.param");
-        all_x_embedder.load_model("z_image_turbo_transformer_all_x_embedder.ncnn.bin");
+        all_x_embedder.load_param(PathJoin(models_dir, "z_image_turbo_transformer_all_x_embedder.ncnn.param").c_str());
+        all_x_embedder.load_model(PathJoin(models_dir, "z_image_turbo_transformer_all_x_embedder.ncnn.bin").c_str());
 
         ncnn::Net noise_refiner;
         noise_refiner.opt.vulkan_device_index = gpuid;
@@ -455,8 +484,8 @@ int main()
         noise_refiner.opt.use_fp16_arithmetic = false;
         noise_refiner.opt.use_bf16_packed = use_bf16;
         noise_refiner.opt.use_bf16_storage = use_bf16;
-        noise_refiner.load_param("z_image_turbo_transformer_noise_refiner.ncnn.param");
-        noise_refiner.load_model("z_image_turbo_transformer_noise_refiner.ncnn.bin");
+        noise_refiner.load_param(PathJoin(models_dir, "z_image_turbo_transformer_noise_refiner.ncnn.param").c_str());
+        noise_refiner.load_model(PathJoin(models_dir, "z_image_turbo_transformer_noise_refiner.ncnn.bin").c_str());
 
         ncnn::Net unified_refiner;
         unified_refiner.opt.vulkan_device_index = gpuid;
@@ -466,8 +495,8 @@ int main()
         unified_refiner.opt.use_fp16_arithmetic = false;
         unified_refiner.opt.use_bf16_packed = use_bf16;
         unified_refiner.opt.use_bf16_storage = use_bf16;
-        unified_refiner.load_param("z_image_turbo_transformer_unified.ncnn.param");
-        unified_refiner.load_model("z_image_turbo_transformer_unified.ncnn.bin");
+        unified_refiner.load_param(PathJoin(models_dir, "z_image_turbo_transformer_unified.ncnn.param").c_str());
+        unified_refiner.load_model(PathJoin(models_dir, "z_image_turbo_transformer_unified.ncnn.bin").c_str());
 
         ncnn::Net all_final_layer;
         all_final_layer.opt.vulkan_device_index = gpuid;
@@ -477,8 +506,8 @@ int main()
         all_final_layer.opt.use_fp16_arithmetic = false;
         all_final_layer.opt.use_bf16_packed = use_bf16;
         all_final_layer.opt.use_bf16_storage = use_bf16;
-        all_final_layer.load_param("z_image_turbo_transformer_all_final_layer.ncnn.param");
-        all_final_layer.load_model("z_image_turbo_transformer_all_final_layer.ncnn.bin");
+        all_final_layer.load_param(PathJoin(models_dir, "z_image_turbo_transformer_all_final_layer.ncnn.param").c_str());
+        all_final_layer.load_model(PathJoin(models_dir, "z_image_turbo_transformer_all_final_layer.ncnn.bin").c_str());
 
         for (int z = 0; z < steps; z++)
         {
@@ -570,7 +599,7 @@ int main()
         {
             for (int px = 0; px < num_patches_w; px++)
             {
-                const float* ptr = x.row(py * num_patches_w + px);
+                const float *ptr = x.row(py * num_patches_w + px);
 
                 for (int q = 0; q < channels; q++)
                 {
@@ -611,8 +640,8 @@ int main()
         vae.opt.use_fp16_arithmetic = false;
         vae.opt.use_bf16_packed = use_bf16;
         vae.opt.use_bf16_storage = use_bf16;
-        vae.load_param("z_image_turbo_vae.ncnn.param");
-        vae.load_model("z_image_turbo_vae.ncnn.bin");
+        vae.load_param(PathJoin(models_dir, "z_image_turbo_vae.ncnn.param").c_str());
+        vae.load_model(PathJoin(models_dir, "z_image_turbo_vae.ncnn.bin").c_str());
 
         ncnn::Extractor ex = vae.create_extractor();
 
