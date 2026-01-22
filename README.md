@@ -59,7 +59,7 @@ cd z-image-ncnn
 git submodule update --init --recursive
 mkdir build
 cd build
-cmake ../src
+cmake -DNCNN_VULKAN=ON ../src
 make -j8
 ```
 
