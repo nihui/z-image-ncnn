@@ -1,16 +1,22 @@
+cmake_policy(SET CMP0091 NEW)
+set(CMAKE_POLICY_DEFAULT_CMP0091 NEW)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
 cmake_minimum_required(VERSION 3.10)
-project(z-image-ncnn)
+project(zimage-ncnn-vulkan)
 
-# set(ncnn_DIR "/home/nihui/osd/ncnn-nihui-fix/build/install/lib64/cmake/ncnn")
-find_package(ncnn REQUIRED)
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE release CACHE STRING "Choose the type of build" FORCE)
+endif()
 
-find_package(OpenCV REQUIRED core highgui imgproc)
+add_executable(zimage-ncnn-vulkan main.cpp bpe_tokenizer.cpp)
 
-set(CMAKE_CXX_STANDARD 17)
+include(${CMAKE_CURRENT_SOURCE_DIR}/deps_ncnn.cmake)
+include(${CMAKE_CURRENT_SOURCE_DIR}/deps_codec.cmake)
 
-add_executable(z-image-ncnn
-    bpe_tokenizer.cpp
-    main.cpp
-)
+set(ZIMAGE_LINK_LIBRARIES ncnn ${DEPS_CODEC_LIBRARIES})
 
-target_link_libraries(z-image-ncnn ncnn ${OpenCV_LIBS})
+target_link_libraries(zimage-ncnn-vulkan ${ZIMAGE_LINK_LIBRARIES})
+
+include(GNUInstallDirs)
+install(TARGETS zimage-ncnn-vulkan RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

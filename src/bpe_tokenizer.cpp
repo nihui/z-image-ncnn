@@ -18,7 +18,8 @@ static std::string Trim(const std::string& s) {
 std::vector<std::string> BpeTokenizer::LoadVocab(const std::string& vocab_path) {
     std::ifstream ifs(vocab_path);
     if (!ifs.is_open()) {
-        throw std::runtime_error("Failed to open vocab file: " + vocab_path);
+        // throw std::runtime_error("Failed to open vocab file: " + vocab_path);
+        fprintf(stderr, "Failed to open vocab file: %s\n", vocab_path.c_str());
     }
     std::vector<std::string> vocab;
     vocab.reserve(50000);
@@ -42,7 +43,8 @@ std::unordered_map<std::string, int> BpeTokenizer::BuildTokenToId(const std::vec
 std::unordered_map<std::string, int> BpeTokenizer::LoadMergesRank(const std::string& merges_path) {
     std::ifstream ifs(merges_path);
     if (!ifs.is_open()) {
-        throw std::runtime_error("Failed to open merges file: " + merges_path);
+        // throw std::runtime_error("Failed to open merges file: " + merges_path);
+        fprintf(stderr, "Failed to open merges file: %s\n", merges_path.c_str());
     }
     std::unordered_map<std::string, int> merges;
     merges.reserve(50000);
@@ -351,7 +353,8 @@ BpeTokenizer BpeTokenizer::LoadFromFiles(const std::string& vocab_path,
     BpeTokenizer tok;
     tok.id_to_token_ = LoadVocab(vocab_path);
     if (tok.id_to_token_.empty()) {
-        throw std::runtime_error("Vocab is empty: " + vocab_path);
+        // throw std::runtime_error("Vocab is empty: " + vocab_path);
+        fprintf(stderr, "Vocab is empty: %s\n", vocab_path.c_str());
     }
     tok.token_to_id_ = BuildTokenToId(tok.id_to_token_);
     tok.merges_rank_ = LoadMergesRank(merges_path);
