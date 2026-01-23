@@ -8,9 +8,13 @@
 
 #include <random>
 
-#include <opencv2/core/core.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
+#if _WIN32
+// image encoder with wic
+#include "wic_image.h"
+#else // _WIN32
+// image encoder with libpng
+#include "png_image.h"
+#endif // _WIN32
 
 #include "bpe_tokenizer.h"
 
@@ -628,11 +632,15 @@ int main()
         const float norm_vals[3] = {127.5f, 127.5f, 127.5f};
         vae_out.substract_mean_normalize(mean_vals, norm_vals);
 
-        cv::Mat bgr(height, width, CV_8UC3);
+        ncnn::Mat rgb(width, height, (size_t)3u, 3);
 
-        vae_out.to_pixels(bgr.data, ncnn::Mat::PIXEL_RGB2BGR);
+        vae_out.to_pixels((unsigned char*)rgb.data, ncnn::Mat::PIXEL_RGB);
 
-        cv::imwrite("out.png", bgr);
+#if _WIN32
+        wic_encode_image(L"out.png", rgb.w, rgb.h, rgb.elempack, rgb.data);
+#else
+        png_save("out.png", rgb.w, rgb.h, rgb.elempack, (const unsigned char*)rgb.data);
+#endif
     }
 
     return 0;
