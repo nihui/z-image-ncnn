@@ -24,6 +24,8 @@ Further performance and video memory usage optimizations are underway. Please st
 
 https://huggingface.co/nihui-szyl/z-image-ncnn/tree/main/z-image-turbo
 
+https://huggingface.co/nihui-szyl/z-image-ncnn/tree/main/z-image
+
 ## Build from Source
 
 1. Clone this project with all submodules
